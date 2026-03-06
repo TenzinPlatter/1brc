@@ -2,36 +2,27 @@ use std::{collections::HashMap, fs::read_to_string};
 
 fn main() {
     let contents = read_to_string("./data/measurements.txt").unwrap();
-    let mut map: HashMap<String, Vec<f32>> = HashMap::new();
+    // (min, max, len, total)
+    let mut map: HashMap<String, (f64, f64, usize, f64)> = HashMap::new();
     for line in contents.lines() {
         let (station, temperature) = line.split_once(";").unwrap();
-        let temperature = temperature.parse::<f32>().unwrap();
+        let temperature = temperature.parse::<f64>().unwrap();
 
-        if map.contains_key(station) {
-            let last = map.get_mut(station).unwrap();
-            last.push(temperature);
-        } else {
-            map.insert(station.to_string(), vec![temperature]);
-        }
+        let entry = map.entry(station.to_string())
+            .or_insert((f64::MAX, f64::MIN, 0, 0.));
+        entry.0 = entry.0.min(temperature);
+        entry.1 = entry.1.max(temperature);
+        entry.2 += 1;
+        entry.3 += temperature;
     }
 
     print!("{{");
-    let n_stations = map.len();
-    for (curr, (station, measurements)) in map.into_iter().enumerate() {
-        let min = measurements
-            .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
-        let max = measurements
-            .iter()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
+    let mut stats = map.into_iter().peekable();
+    while let Some((station, (min, max, len, sum))) = stats.next() {
 
-        let len = measurements.len();
-        let mean = measurements.iter().sum::<f32>() / len as f32;
-
+        let mean = sum / len as f64;
         print!("{station}={min:.1}/{mean:.1}/{max:.1}");
-        if curr < n_stations {
+        if stats.peek().is_some() {
             print!(", ");
         }
     }
