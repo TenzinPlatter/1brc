@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "billion-row-challenge"
+name = "breezy"
 version = "0.1.0"
