@@ -4,13 +4,13 @@ use std::{arch::x86_64::_SIDD_NEGATIVE_POLARITY, collections::HashMap, fs::read_
 fn main() {
     let contents = read_to_string("./data/measurements.txt").unwrap();
     // (min, max, len, total)
-    let mut map: HashMap<String, (f64, f64, usize, f64)> = HashMap::new();
+    let mut map: HashMap<&str, (f64, f64, usize, f64)> = HashMap::new();
     for line in contents.lines() {
         let (station, temperature) = line.rsplit_once(";").unwrap();
         let temperature = parse_temperature(temperature);
 
         let entry = map
-            .entry(station.to_string())
+            .entry(station)
             .or_insert((f64::MAX, f64::MIN, 0, 0.));
         entry.0 = entry.0.min(temperature);
         entry.1 = entry.1.max(temperature);
