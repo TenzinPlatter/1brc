@@ -1,5 +1,4 @@
-use core::net;
-use std::{arch::x86_64::_SIDD_NEGATIVE_POLARITY, collections::HashMap, fs::read_to_string};
+use std::{collections::HashMap, fs::read_to_string};
 
 fn main() {
     let contents = read_to_string("./data/measurements.txt").unwrap();
@@ -9,9 +8,7 @@ fn main() {
         let (station, temperature) = line.rsplit_once(";").unwrap();
         let temperature = parse_temperature(temperature);
 
-        let entry = map
-            .entry(station)
-            .or_insert((f64::MAX, f64::MIN, 0, 0.));
+        let entry = map.entry(station).or_insert((f64::MAX, f64::MIN, 0, 0.));
         entry.0 = entry.0.min(temperature);
         entry.1 = entry.1.max(temperature);
         entry.2 += 1;
@@ -31,26 +28,21 @@ fn main() {
 }
 
 fn parse_temperature(temperature: &str) -> f64 {
+    let mut chars = temperature.chars().rev().peekable();
+    let decimal = chars.next().unwrap() as i32 - '0' as i32;
+    let negative = unsafe {
+        *temperature.as_ptr() == b'-'
+    };
+
+    // skip over the '.' character
+    let _ = chars.next();
     let mut whole = 0;
-    let mut decimal = 0;
-    let mut found_dec = false;
-    let mut negative = false;
-
-    for c in temperature.chars() {
-        if c == '.' {
-            found_dec = true;
-            continue;
+    while let Some(c) = chars.next() {
+        if chars.peek().is_none() && negative {
+            break;
         }
 
-        if c == '-' {
-            negative = true;
-        }
-
-        if found_dec {
-            decimal += c as i32 - '0' as i32;
-        } else {
-            whole += c as i32 - '0' as i32;
-        }
+        whole += c as i32 - '0' as i32;
     }
 
     if negative {
