@@ -1,8 +1,5 @@
 use std::{
-    collections::HashMap,
-    os::fd::AsRawFd,
-    ptr::slice_from_raw_parts_mut,
-    str::from_utf8_unchecked,
+    collections::HashMap, os::fd::AsRawFd, ptr::slice_from_raw_parts_mut, str::from_utf8_unchecked,
 };
 
 use mmap::{MapOption, MemoryMap};
@@ -21,7 +18,7 @@ fn main() {
     // (min, max, len, total)
     let mut map: HashMap<&str, (f64, f64, usize, f64)> = HashMap::new();
     for line in contents.lines() {
-        let (station, temperature) = line.rsplit_once(";").unwrap();
+        let (station, temperature) = split_stat(line);
         let temperature = parse_temperature(temperature);
 
         let entry = map.entry(station).or_insert((f64::MAX, f64::MIN, 0, 0.));
@@ -41,6 +38,12 @@ fn main() {
         }
     }
     println!("}}");
+}
+
+#[inline(always)]
+fn split_stat(stat: &str) -> (&str, &str) {
+    let index = stat.chars().rev().position(|c| c == ';').unwrap();
+    stat.split_at(stat.len() - index)
 }
 
 #[inline(always)]
