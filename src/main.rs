@@ -1,7 +1,23 @@
-use std::{collections::HashMap, fs::read_to_string};
+use std::{
+    collections::HashMap,
+    os::fd::AsRawFd,
+    ptr::slice_from_raw_parts_mut,
+    str::from_utf8_unchecked,
+};
+
+use mmap::{MapOption, MemoryMap};
 
 fn main() {
-    let contents = read_to_string("./data/measurements.txt").unwrap();
+    let file = std::fs::File::open("./data/measurements.txt").unwrap();
+    let file_len = file.metadata().unwrap().len() as usize;
+    let mmap = MemoryMap::new(
+        file_len,
+        &[MapOption::MapFd(file.as_raw_fd()), MapOption::MapReadable],
+    )
+    .unwrap();
+    let slice = slice_from_raw_parts_mut(mmap.data(), file_len);
+    let contents = unsafe { from_utf8_unchecked(slice.as_ref().unwrap()) }.trim();
+
     // (min, max, len, total)
     let mut map: HashMap<&str, (f64, f64, usize, f64)> = HashMap::new();
     for line in contents.lines() {
@@ -27,12 +43,11 @@ fn main() {
     println!("}}");
 }
 
+#[inline(always)]
 fn parse_temperature(temperature: &str) -> f64 {
     let mut chars = temperature.chars().rev().peekable();
     let decimal = chars.next().unwrap() as i32 - '0' as i32;
-    let negative = unsafe {
-        *temperature.as_ptr() == b'-'
-    };
+    let negative = unsafe { *temperature.as_ptr() == b'-' };
 
     // skip over the '.' character
     let _ = chars.next();

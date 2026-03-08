@@ -7,3 +7,4 @@ edition = "2024"
 debug = true
 
 [dependencies]
+mmap = "0.1.1"
