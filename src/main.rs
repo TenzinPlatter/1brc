@@ -1,8 +1,38 @@
 use std::{
-    collections::HashMap, os::fd::AsRawFd, ptr::slice_from_raw_parts_mut, str::from_utf8_unchecked,
+    collections::HashMap,
+    hash::{BuildHasherDefault, Hasher},
+    os::fd::AsRawFd,
+    ptr::slice_from_raw_parts_mut,
+    str::from_utf8_unchecked,
 };
 
 use mmap::{MapOption, MemoryMap};
+
+#[derive(Default)]
+struct MyHasher(u64);
+
+impl Hasher for MyHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        // hash := FNV_offset_basis
+
+        // for each byte_of_data to be hashed do
+        //     hash := hash × FNV_prime
+        //     hash := hash XOR byte_of_data
+        let mut hash: u64 = 14695981039346656037;
+        for byte in bytes.iter() {
+            hash *= 1099511628211;
+            hash ^= *byte as u64;
+        }
+
+        self.0 = hash
+    }
+}
+
+type MyMap<K, V> = HashMap<K, V, BuildHasherDefault<MyHasher>>;
 
 fn main() {
     let file = std::fs::File::open("./data/measurements.txt").unwrap();
@@ -16,7 +46,8 @@ fn main() {
     let contents = unsafe { from_utf8_unchecked(slice.as_ref().unwrap()) }.trim();
 
     // (min, max, len, total)
-    let mut map: HashMap<&str, (f64, f64, usize, f64)> = HashMap::new();
+    // let mut map: MyMap<&str, (f64, f64, usize, f64)> = MyMap::default();
+    let mut map: HashMap<&str, (f64, f64, usize, f64)> = HashMap::default();
     for line in contents.lines() {
         let (station, temperature) = split_stat(line);
         let temperature = parse_temperature(temperature);
