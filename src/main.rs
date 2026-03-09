@@ -29,14 +29,20 @@ fn main() {
     }
 
     print!("{{");
-    let mut stats = map.into_iter().peekable();
-    while let Some((station, (min, max, len, sum))) = stats.next() {
-        let mean = sum / len as f64;
-        print!("{station}={min:.1}/{mean:.1}/{max:.1}");
-        if stats.peek().is_some() {
+    let mut sorted: Vec<&str> = Vec::with_capacity(1_000_000_000);
+    sorted.extend(map.keys());
+    sorted.sort_unstable();
+
+    let mut key_iter = sorted.iter().peekable();
+    while let Some(key) = key_iter.next() {
+        let (min, max, len, sum) = map.get(key).unwrap();
+        let mean = sum / *len as f64;
+        print!("{key}={min:.1}/{mean:.1}/{max:.1}");
+        if key_iter.peek().is_some() {
             print!(", ");
         }
     }
+
     println!("}}");
 }
 
