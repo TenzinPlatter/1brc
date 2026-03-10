@@ -8,3 +8,4 @@ debug = true
 
 [dependencies]
 mmap = "0.1.1"
+rapidhash = "4.4.1"
