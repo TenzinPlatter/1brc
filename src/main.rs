@@ -1,7 +1,5 @@
 use std::{
-    os::fd::AsRawFd,
-    ptr::slice_from_raw_parts_mut,
-    str::from_utf8_unchecked,
+    os::fd::AsRawFd, ptr::slice_from_raw_parts_mut, str::from_utf8_unchecked,
 };
 
 use mmap::{MapOption, MemoryMap};
@@ -24,9 +22,11 @@ fn main() {
         let (station, temperature) = split_stat(line);
         let temperature = parse_temperature(temperature);
 
-        let entry = map.entry(station).or_insert((f64::MAX, f64::MIN, 0, 0.));
+        let entry = map
+            .entry(station)
+            .or_insert_with(|| (f64::MAX, f64::MIN, 0, 0.));
         entry.0 = entry.0.min(temperature);
-        entry.1  =entry.1.max(temperature);
+        entry.1 = entry.1.max(temperature);
         entry.2 += 1;
         entry.3 += temperature;
     }
