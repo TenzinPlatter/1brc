@@ -5,7 +5,7 @@ use std::{
 };
 
 use mmap::{MapOption, MemoryMap};
-use rapidhash::RapidHashMap;
+use rapidhash::{HashMapExt, RapidHashMap};
 
 fn main() {
     let file = std::fs::File::open("./data/measurements.txt").unwrap();
@@ -19,7 +19,7 @@ fn main() {
     let contents = unsafe { from_utf8_unchecked(slice.as_ref().unwrap()) }.trim();
 
     // (min, max, len, total)
-    let mut map: RapidHashMap<&str, (f64, f64, usize, f64)> = RapidHashMap::default();
+    let mut map: RapidHashMap<&str, (f64, f64, usize, f64)> = RapidHashMap::with_capacity(1000);
     for line in contents.lines() {
         let (station, temperature) = split_stat(line);
         let temperature = parse_temperature(temperature);
