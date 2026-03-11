@@ -13,14 +13,13 @@ fn main() {
     .unwrap();
     let slice = slice_from_raw_parts_mut(mmap.data(), file_len);
     let bytes = unsafe { slice.as_ref().unwrap() };
-    let contents = unsafe { from_utf8_unchecked(bytes) };
 
     // (min, max, len, total)
-    let mut map: RapidHashMap<&str, (f64, f64, usize, f64)> = RapidHashMap::with_capacity(1000);
+    let mut map: RapidHashMap<&[u8], (f64, f64, usize, f64)> = RapidHashMap::with_capacity(1000);
     // TODO: raw byte reading
-    for line in contents.lines() {
+    for line in bytes.trim_ascii_end().split(|c| *c == b'\n') {
         let (station, temperature) = split_stat(line);
-        let temperature = parse_temperature(temperature.as_bytes());
+        let temperature = parse_temperature(temperature);
 
         let entry = map
             .entry(station)
@@ -32,7 +31,7 @@ fn main() {
     }
 
     print!("{{");
-    let mut sorted: Vec<&str> = Vec::with_capacity(1_000_000_000);
+    let mut sorted: Vec<&[u8]> = Vec::with_capacity(1_000_000_000);
     sorted.extend(map.keys());
     sorted.sort_unstable();
 
@@ -40,7 +39,10 @@ fn main() {
     while let Some(key) = key_iter.next() {
         let (min, max, len, sum) = map.get(key).unwrap();
         let mean = sum / *len as f64;
-        print!("{key}={min:.1}/{mean:.1}/{max:.1}");
+        print!(
+            "{station}={min:.1}/{mean:.1}/{max:.1}",
+            station = unsafe { from_utf8_unchecked(key) }
+        );
         if key_iter.peek().is_some() {
             print!(", ");
         }
@@ -50,8 +52,8 @@ fn main() {
 }
 
 #[inline(always)]
-fn split_stat(stat: &str) -> (&str, &str) {
-    let index = stat.bytes().rposition(|c| c == b';').unwrap();
+fn split_stat(stat: &[u8]) -> (&[u8], &[u8]) {
+    let index = stat.iter().rposition(|c| *c == b';').unwrap();
     let (left, right) = stat.split_at(index);
     (left, &right[1..])
 }
