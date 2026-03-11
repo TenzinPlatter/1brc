@@ -7,5 +7,5 @@ edition = "2024"
 debug = true
 
 [dependencies]
+gxhash = "3.5.0"
 mmap = "0.1.1"
-rapidhash = "4.4.1"

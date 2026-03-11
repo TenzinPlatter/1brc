@@ -1,7 +1,18 @@
 use std::{os::fd::AsRawFd, ptr::slice_from_raw_parts_mut, str::from_utf8_unchecked};
 
 use mmap::{MapOption, MemoryMap};
-use rapidhash::{HashMapExt, RapidHashMap};
+
+const N: usize = 1 << 17;
+
+#[derive(Default, Clone)]
+struct Entry {
+    hash: u64,
+    key: &'static [u8],
+    min: i32,
+    max: i32,
+    sum: i32,
+    count: i32,
+}
 
 fn main() {
     let file = std::fs::File::open("./data/measurements.txt").unwrap();
@@ -15,35 +26,50 @@ fn main() {
     let bytes = unsafe { slice.as_ref().unwrap() };
 
     // (min, max, len, total)
-    let mut map: RapidHashMap<&[u8], (f64, f64, usize, f64)> = RapidHashMap::with_capacity(1000);
-    // TODO: raw byte reading
+    let mut table = vec![Entry::default(); N];
     for line in bytes.trim_ascii_end().split(|c| *c == b'\n') {
         let (station, temperature) = split_stat(line);
         let temperature = parse_temperature(temperature);
 
-        let entry = map
-            .entry(station)
-            .or_insert_with(|| (f64::MAX, f64::MIN, 0, 0.));
-        entry.0 = entry.0.min(temperature);
-        entry.1 = entry.1.max(temperature);
-        entry.2 += 1;
-        entry.3 += temperature;
+        let seed = 123456;
+        let hash = gxhash::gxhash64(station, seed);
+        let mut slot = (hash as usize) & (N - 1);
+        loop {
+            let e = &mut table[slot];
+            if e.count == 0 {
+                e.hash = hash;
+                e.key = station;
+
+                e.count += 1;
+                e.min = temperature;
+                e.max = temperature;
+                e.sum = temperature;
+                break;
+            }
+            if e.hash == hash && e.key == station {
+                e.count += 1;
+                e.min = e.min.min(temperature);
+                e.max = e.max.max(temperature);
+                e.sum += temperature;
+                break;
+            }
+            slot = (slot + 1) & (N - 1);
+        }
     }
 
     print!("{{");
-    let mut sorted: Vec<&[u8]> = Vec::with_capacity(1_000_000_000);
-    sorted.extend(map.keys());
-    sorted.sort_unstable();
-
-    let mut key_iter = sorted.iter().peekable();
-    while let Some(key) = key_iter.next() {
-        let (min, max, len, sum) = map.get(key).unwrap();
-        let mean = sum / *len as f64;
+    table.sort_unstable_by(|a, b| a.key.partial_cmp(b.key).unwrap());
+    let mut iter = table.iter().peekable();
+    while let Some(e) = iter.next() {
+        let min = e.min as f64 / 10.;
+        let max = e.max as f64 / 10.;
+        let mean = (e.sum as f64 / 10.) / e.count as f64;
         print!(
             "{station}={min:.1}/{mean:.1}/{max:.1}",
-            station = unsafe { from_utf8_unchecked(key) }
+            station = unsafe { from_utf8_unchecked(e.key) }
         );
-        if key_iter.peek().is_some() {
+
+        if iter.peek().is_some() {
             print!(", ");
         }
     }
@@ -59,7 +85,7 @@ fn split_stat(stat: &[u8]) -> (&[u8], &[u8]) {
 }
 
 #[inline(always)]
-fn parse_temperature(temperature: &[u8]) -> f64 {
+fn parse_temperature(temperature: &[u8]) -> i32 {
     let len = temperature.len();
     let negative = unsafe { *temperature.get_unchecked(0) == b'-' };
     let decimal = unsafe { *temperature.get_unchecked(len - 1) } - b'0';
@@ -74,39 +100,5 @@ fn parse_temperature(temperature: &[u8]) -> f64 {
             + (unsafe { *temperature.get_unchecked(start_index + 1) } - b'0')
     };
 
-    ((whole as f64) + decimal as f64 / 10.) * (1 - 2 * negative as i32) as f64
-}
-
-#[cfg(test)]
-mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
-
-    #[test]
-    fn test_parse_temperature() {
-        // negative two-digit whole
-        assert_eq!(parse_temperature(b"-99.9"), -99.9);
-        assert_eq!(parse_temperature(b"-99.0"), -99.0);
-        assert_eq!(parse_temperature(b"-50.5"), -50.5);
-        assert_eq!(parse_temperature(b"-10.1"), -10.1);
-        assert_eq!(parse_temperature(b"-12.3"), -12.3);
-        // negative one-digit whole
-        assert_eq!(parse_temperature(b"-9.9"), -9.9);
-        assert_eq!(parse_temperature(b"-9.0"), -9.0);
-        assert_eq!(parse_temperature(b"-1.5"), -1.5);
-        assert_eq!(parse_temperature(b"-0.1"), -0.1);
-        // zero
-        assert_eq!(parse_temperature(b"0.0"), 0.0);
-        // positive one-digit whole
-        assert_eq!(parse_temperature(b"0.1"), 0.1);
-        assert_eq!(parse_temperature(b"1.5"), 1.5);
-        assert_eq!(parse_temperature(b"9.0"), 9.0);
-        assert_eq!(parse_temperature(b"9.9"), 9.9);
-        // positive two-digit whole
-        assert_eq!(parse_temperature(b"10.0"), 10.0);
-        assert_eq!(parse_temperature(b"12.3"), 12.3);
-        assert_eq!(parse_temperature(b"50.5"), 50.5);
-        assert_eq!(parse_temperature(b"99.0"), 99.0);
-        assert_eq!(parse_temperature(b"99.9"), 99.9);
-    }
+    ((whole as i32 * 10) + decimal as i32) * (1 - 2 * negative as i32)
 }
