@@ -35,7 +35,7 @@ fn main() {
         let hash = gxhash::gxhash64(station, seed);
         let mut slot = (hash as usize) & (N - 1);
         loop {
-            let e = &mut table[slot];
+            let e = unsafe { table.get_unchecked_mut(slot) };
             if e.count == 0 {
                 e.hash = hash;
                 e.key = station;
