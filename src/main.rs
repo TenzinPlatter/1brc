@@ -1,8 +1,14 @@
-use std::{os::fd::AsRawFd, ptr::slice_from_raw_parts_mut, str::from_utf8_unchecked};
+use std::{
+    arch::x86_64::{_mm_loadu_epi8, _mm256_loadu_epi8},
+    os::fd::AsRawFd,
+    ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
+    str::from_utf8_unchecked,
+};
 
 use mmap::{MapOption, MemoryMap};
 
 const N: usize = 1 << 17;
+const NLINES: usize = 1_000_000_000;
 
 #[derive(Default, Clone)]
 struct Entry {
@@ -23,11 +29,19 @@ fn main() {
     )
     .unwrap();
     let slice = slice_from_raw_parts_mut(mmap.data(), file_len);
-    let bytes = unsafe { slice.as_ref().unwrap() };
+    let bytes = unsafe { slice.as_ref().unwrap().trim_ascii_end() };
 
     // (min, max, len, total)
     let mut table = vec![Entry::default(); N];
-    for line in bytes.trim_ascii_end().split(|c| *c == b'\n') {
+
+    const CHUNKSIZE: usize = 16;
+    let ptr = bytes.as_ptr();
+    let mut i = 0;
+
+    // TODO: semicolon on same pass?
+    // let newline_needle = unsafe { _mm256_loadu_epi8(b'\n' as i8) };
+    // while i + CHUNKSIZE <= NLINES {
+    for line in bytes.split(|c| *c == b'\n') {
         let (station, temperature) = split_stat(line);
         let temperature = parse_temperature(temperature);
 
@@ -59,7 +73,7 @@ fn main() {
 
     print!("{{");
     table.sort_unstable_by(|a, b| a.key.partial_cmp(b.key).unwrap());
-    let mut iter = table.iter().peekable();
+    let mut iter = table.iter().filter(|i| i.count > 0).peekable();
     while let Some(e) = iter.next() {
         let min = e.min as f64 / 10.;
         let max = e.max as f64 / 10.;
@@ -79,9 +93,21 @@ fn main() {
 
 #[inline(always)]
 fn split_stat(stat: &[u8]) -> (&[u8], &[u8]) {
-    let index = stat.iter().rposition(|c| *c == b';').unwrap();
-    let (left, right) = stat.split_at(index);
-    (left, &right[1..])
+    // max len: -99.9 - 5 bytes - ';' is at most 6 bytes from end
+    // min len: 0.0 - 3 bytes - ';' is at least 4 bytes
+    // i.e. ';' is at one of len - {4,5,6}
+    let len = stat.len();
+    let at_4 = unsafe { *stat.get_unchecked(len - 4) } == b';';
+    let at_5 = unsafe { *stat.get_unchecked(len - 5) } == b';';
+    let at_6 = unsafe { *stat.get_unchecked(len - 6) } == b';';
+
+    let index = len - (at_4 as usize * 4) - (at_5 as usize * 5) - (at_6 as usize * 6);
+    let ptr = stat.as_ptr();
+    unsafe {
+        let left = slice_from_raw_parts(ptr, index);
+        let right = slice_from_raw_parts(ptr.add(index + 1), len - index - 1);
+        (left.as_ref().unwrap(), right.as_ref().unwrap())
+    }
 }
 
 #[inline(always)]
