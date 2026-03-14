@@ -92,7 +92,6 @@ fn parse_temperature(temperature: &[u8]) -> i32 {
 
 #[inline(always)]
 fn merge_entry(table: &mut [Entry], entry: &mut Entry) {
-    // TODO: make table store references or pointers so we aren't cloning on merge
     let mut slot = (entry.hash as usize) & (N - 1);
     loop {
         let e = unsafe { table.get_unchecked_mut(slot) };
@@ -101,7 +100,7 @@ fn merge_entry(table: &mut [Entry], entry: &mut Entry) {
             break;
         }
 
-        if e.hash == entry.hash && e.key == entry.key {
+        if e.hash == entry.hash {
             e.count += entry.count;
             e.sum += entry.sum;
             e.min = e.min.min(entry.min);
@@ -134,7 +133,7 @@ fn set_entry(
             break;
         }
 
-        if e.hash == hash && e.key == station {
+        if e.hash == hash {
             e.count += 1;
             e.min = e.min.min(temperature);
             e.max = e.max.max(temperature);
