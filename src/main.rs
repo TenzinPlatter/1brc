@@ -55,8 +55,9 @@ fn main() {
         }
 
         print!("{{");
-        table.sort_unstable_by(|a, b| a.key.partial_cmp(b.key).unwrap());
-        let mut iter = table.iter().filter(|i| i.count > 0).peekable();
+        let mut small_table: Vec<_> = table.into_iter().filter(|e| e.count > 0).collect();
+        small_table.sort_unstable_by(|a, b| a.key.partial_cmp(b.key).unwrap());
+        let mut iter = small_table.iter().peekable();
         while let Some(e) = iter.next() {
             let min = e.min as f64 / 10.;
             let max = e.max as f64 / 10.;
