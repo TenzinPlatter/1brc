@@ -1,0 +1,3 @@
+# 1 Billion Row Challenge
+
+My attempt at 1 billion row challenge. My main goal was sub 1s which I managed to achieve on my machine. You can see the script I used to benchmark and the times associated with each commit in their messages. My implementation cheats abit by assuming no hash collisions which I tested with my input list. Removing this the solution is probably ~1.2s. You are also not allowed to use external libraries but I did for my hash function and for mmap so I didn't have to deal with libc directly. These kinds of things were less interesting to me and I didn't want to sink ages into it.
