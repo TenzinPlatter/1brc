@@ -15,6 +15,7 @@ const CHUNKSIZE: usize = 32;
 const SEED: i64 = 123456;
 
 #[derive(Default, Clone)]
+#[repr(align(64))]
 struct Entry {
     hash: u64,
     key: &'static [u8],
