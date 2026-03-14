@@ -1,5 +1,7 @@
 use std::{
-    arch::x86_64::{_mm256_cmpeq_epi8, _mm256_loadu_epi8, _mm256_movemask_epi8, _mm256_set1_epi8},
+    arch::x86_64::{
+        _MM_HINT_T0, _MM_HINT_T1, _mm_prefetch, _mm256_cmpeq_epi8, _mm256_loadu_epi8, _mm256_movemask_epi8, _mm256_set1_epi8
+    },
     os::fd::AsRawFd,
     ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
     str::from_utf8_unchecked,
@@ -74,10 +76,13 @@ fn main() {
         };
 
         let (station, temperature) = split_stat(line);
-        let temperature = parse_temperature(temperature);
-
         let hash = gxhash::gxhash64(station, seed);
         let slot = (hash as usize) & (N - 1);
+        unsafe {
+            _mm_prefetch::<{ _MM_HINT_T0 }>(table.as_ptr().add(slot) as *const i8);
+        }
+        let temperature = parse_temperature(temperature);
+
         set_entry(&mut table, slot, hash, station, temperature);
     }
 
