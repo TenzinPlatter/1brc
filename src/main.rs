@@ -135,9 +135,13 @@ fn set_entry(
 
         if e.hash == hash {
             e.count += 1;
-            e.min = e.min.min(temperature);
-            e.max = e.max.max(temperature);
             e.sum += temperature;
+            if temperature < e.min {
+                e.min = temperature;
+            }
+            if temperature > e.max {
+                e.max = temperature;
+            }
             break;
         }
 

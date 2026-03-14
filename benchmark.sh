@@ -3,4 +3,4 @@
 set -xeo pipefail
 
 cargo build --release
-hyperfine --warmup 5 -m 3 target/release/breezy
+hyperfine --warmup 5 -m 5 target/release/breezy
