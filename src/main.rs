@@ -82,13 +82,10 @@ fn parse_temperature(temperature: &[u8]) -> i32 {
     let ndigits = len - 2 - negative as usize;
     let start_index = negative as usize;
 
-    // either 1 or 2
-    let whole = if ndigits == 1 {
-        (unsafe { *temperature.get_unchecked(start_index) } - b'0')
-    } else {
-        (unsafe { *temperature.get_unchecked(start_index) } - b'0') * 10
-            + (unsafe { *temperature.get_unchecked(start_index + 1) } - b'0')
-    };
+    let has_10s = ndigits as u8 - 1;
+    let whole = (unsafe { *temperature.get_unchecked(start_index) } - b'0')
+        + ((unsafe { *temperature.get_unchecked(start_index) } - b'0') * (9 * (has_10s)))
+        + ((unsafe { *temperature.get_unchecked(start_index + 1) } - b'0') * has_10s);
 
     ((whole as i32 * 10) + decimal as i32) * (1 - 2 * negative as i32)
 }
