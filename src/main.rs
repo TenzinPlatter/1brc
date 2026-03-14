@@ -1,8 +1,5 @@
 use std::{
-    arch::x86_64::{
-        _mm_loadu_epi8, _mm256_cmpeq_epi8, _mm256_loadu_epi8, _mm256_movemask_epi8,
-        _mm256_set1_epi8,
-    },
+    arch::x86_64::{_mm256_cmpeq_epi8, _mm256_loadu_epi8, _mm256_movemask_epi8, _mm256_set1_epi8},
     os::fd::AsRawFd,
     ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
     str::from_utf8_unchecked,
@@ -33,7 +30,6 @@ fn main() {
     let slice = slice_from_raw_parts_mut(mmap.data(), file_len);
     let bytes = unsafe { slice.as_ref().unwrap().trim_ascii_end() };
 
-    // (min, max, len, total)
     let mut table = vec![Entry::default(); N];
     let seed = 123456;
 
@@ -81,28 +77,8 @@ fn main() {
         let temperature = parse_temperature(temperature);
 
         let hash = gxhash::gxhash64(station, seed);
-        let mut slot = (hash as usize) & (N - 1);
-        loop {
-            let e = unsafe { table.get_unchecked_mut(slot) };
-            if e.count == 0 {
-                e.hash = hash;
-                e.key = station;
-
-                e.count += 1;
-                e.min = temperature;
-                e.max = temperature;
-                e.sum = temperature;
-                break;
-            }
-            if e.hash == hash && e.key == station {
-                e.count += 1;
-                e.min = e.min.min(temperature);
-                e.max = e.max.max(temperature);
-                e.sum += temperature;
-                break;
-            }
-            slot = (slot + 1) & (N - 1);
-        }
+        let slot = (hash as usize) & (N - 1);
+        set_entry(&mut table, slot, hash, station, temperature);
     }
 
     if i < bytes_len {
@@ -118,28 +94,8 @@ fn main() {
             let temperature = parse_temperature(temperature);
 
             let hash = gxhash::gxhash64(station, seed);
-            let mut slot = (hash as usize) & (N - 1);
-            loop {
-                let e = unsafe { table.get_unchecked_mut(slot) };
-                if e.count == 0 {
-                    e.hash = hash;
-                    e.key = station;
-
-                    e.count += 1;
-                    e.min = temperature;
-                    e.max = temperature;
-                    e.sum = temperature;
-                    break;
-                }
-                if e.hash == hash && e.key == station {
-                    e.count += 1;
-                    e.min = e.min.min(temperature);
-                    e.max = e.max.max(temperature);
-                    e.sum += temperature;
-                    break;
-                }
-                slot = (slot + 1) & (N - 1);
-            }
+            let slot = (hash as usize) & (N - 1);
+            set_entry(&mut table, slot, hash, station, temperature);
         }
     }
 
@@ -199,6 +155,39 @@ fn parse_temperature(temperature: &[u8]) -> i32 {
     };
 
     ((whole as i32 * 10) + decimal as i32) * (1 - 2 * negative as i32)
+}
+
+#[inline(always)]
+fn set_entry(
+    table: &mut [Entry],
+    mut slot: usize,
+    hash: u64,
+    station: &'static [u8],
+    temperature: i32,
+) {
+    loop {
+        let e = unsafe { table.get_unchecked_mut(slot) };
+        if e.count == 0 {
+            e.hash = hash;
+            e.key = station;
+
+            e.count += 1;
+            e.min = temperature;
+            e.max = temperature;
+            e.sum = temperature;
+            break;
+        }
+
+        if e.hash == hash && e.key == station {
+            e.count += 1;
+            e.min = e.min.min(temperature);
+            e.max = e.max.max(temperature);
+            e.sum += temperature;
+            break;
+        }
+
+        slot = (slot + 1) & (N - 1);
+    }
 }
 
 #[cfg(test)]
