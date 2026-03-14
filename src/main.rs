@@ -1,6 +1,7 @@
 use std::{
     arch::x86_64::{
-        _MM_HINT_T0, _MM_HINT_T1, _mm_prefetch, _mm256_cmpeq_epi8, _mm256_loadu_epi8, _mm256_movemask_epi8, _mm256_set1_epi8
+        _MM_HINT_T0, _mm_prefetch, _mm256_cmpeq_epi8, _mm256_loadu_epi8, _mm256_movemask_epi8,
+        _mm256_set1_epi8,
     },
     os::fd::AsRawFd,
     ptr::{slice_from_raw_parts, slice_from_raw_parts_mut},
@@ -36,29 +37,43 @@ fn main() {
     let seed = 123456;
 
     const CHUNKSIZE: usize = 32;
-    let needle = unsafe { _mm256_set1_epi8(b'\n' as i8) };
+    let newline_needle = unsafe { _mm256_set1_epi8(b'\n' as i8) };
+    let semicolon_needle = unsafe { _mm256_set1_epi8(b';' as i8) };
     let ptr = bytes.as_ptr();
     let bytes_len = bytes.len();
+    let mut semicolon_idx = 0;
+    let mut semicolon_chunks = 0;
     let mut i = 0;
     let mut chunks = 0;
     let mut found = false;
+    let mut found_semi = false;
 
-    // TODO: semicolon on same pass?
     'main_loop: while i + CHUNKSIZE <= bytes_len {
-        let line = unsafe {
+        let (station, temperature) = unsafe {
             #[allow(unused)]
             let mut n = 0;
             while i + CHUNKSIZE <= bytes_len {
                 let haystack = _mm256_loadu_epi8(ptr.add(i) as *const i8);
-                let res = _mm256_cmpeq_epi8(needle, haystack);
-                let mask = _mm256_movemask_epi8(res);
-                if mask != 0 {
-                    n = mask.trailing_zeros();
+                let newline_res = _mm256_cmpeq_epi8(newline_needle, haystack);
+                let newline_mask = _mm256_movemask_epi8(newline_res);
+
+                let semicolon_res = _mm256_cmpeq_epi8(semicolon_needle, haystack);
+                let semicolon_mask = _mm256_movemask_epi8(semicolon_res);
+
+                if semicolon_mask != 0 {
+                    semicolon_idx = semicolon_mask.trailing_zeros();
+                    found_semi = true;
+                }
+
+                if newline_mask != 0 {
+                    n = newline_mask.trailing_zeros();
                     // newline is at i + n
                     found = true;
                     break;
                 }
+
                 chunks += 1;
+                semicolon_chunks += !found_semi as i32;
                 i += CHUNKSIZE;
             }
 
@@ -67,15 +82,19 @@ fn main() {
             }
 
             let chunk_offset = CHUNKSIZE * chunks;
-            let line = slice_from_raw_parts(ptr.add(i - chunk_offset), chunk_offset + n as usize)
-                .as_ref()
-                .unwrap();
+            let line_len = chunk_offset + n as usize;
+            let station_len = (CHUNKSIZE * semicolon_chunks as usize) + semicolon_idx as usize;
+            let station = slice_from_raw_parts(ptr.add(i - chunk_offset), station_len);
+            let temperature = slice_from_raw_parts(
+                ptr.add(i - chunk_offset + station_len + 1),
+                line_len - 1 - station_len,
+            );
+
             i += 1 + n as usize;
             chunks = 0;
-            line
+            (station.as_ref().unwrap(), temperature.as_ref().unwrap())
         };
 
-        let (station, temperature) = split_stat(line);
         let hash = gxhash::gxhash64(station, seed);
         let slot = (hash as usize) & (N - 1);
         unsafe {
